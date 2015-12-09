@@ -1,0 +1,178 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Collaborative Text Editor</title>
+    <style>
+        #editor {
+            position: absolute;
+            top: 15px;
+            right: 0;
+            bottom: 15px;
+            left: 0;
+        }
+
+
+        .other-user-cursor {
+            position: absolute;
+            border-left: 2px solid gold;
+            -moz-animation: blink 1s infinite;
+            -o-animation: blink 1s infinite;
+            -webkit-animation: blink 1s infinite;
+            animation: blink 1s infinite;
+        }
+
+        @-moz-keyframes blink {
+          0% {
+           border-left-color: transparent;
+          }
+          50% {
+            border-left-color: rgba(255, 215, 0, 0.25);
+          }
+          100% {
+            border-left-color: transparent;
+          }
+        }
+
+        @-webkit-keyframes blink {
+          0% {
+            border-left-color: transparent;
+          }
+          50% {
+            border-left-color: rgba(255, 215, 0, 0.25);
+          }
+          100% {
+            border-left-color: transparent;
+          }
+        }
+
+        @keyframes blink {
+          0% {
+            border-left-color: transparent;
+          }
+          50% {
+            border-left-color: rgba(255, 215, 0, 0.25);
+          }
+          100% {
+            border-left-color: transparent;
+          }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="editor">using Owin;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace CollaborativeTextEditor
+{
+    public class Startup
+    {
+        public void Configuration(IAppBuilder app)
+        {
+
+        }
+    }
+}</div>
+
+    
+    <script src="Scripts/jquery-1.9.1.js"></script>
+    <script src="Scripts/ace/ace.js"></script>
+    <script src="Scripts/ace/theme-monokai.js"></script>
+    <script src="Scripts/ace/mode-csharp.js"></script>
+    <script src="Scripts/ace/ext-language_tools.js"></script>
+    <script src="Scripts/jquery.signalR-2.2.0.js"></script>
+    <script src="signalr/hubs"></script>
+
+    <script>
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/monokai");
+        editor.getSession().setMode("ace/mode/csharp");
+
+        // take from http://stackoverflow.com/questions/24807066/multiple-cursors-in-ace-editor
+        var marker = {};
+        marker.cursors = [];
+
+        marker.update = function (html, markerLayer, session, config) {
+            var start = config.firstRow, end = config.lastRow;
+            var cursors = this.cursors
+            for (var i = 0; i < cursors.length; i++) {
+                var pos = this.cursors[i];
+                if (pos.row < start) {
+                    continue
+                } else if (pos.row > end) {
+                    break
+                } else {
+                    // compute cursor position on screen
+                    // this code is based on ace/layer/marker.js
+                    var screenPos = session.documentToScreenPosition(pos)
+
+                    var height = config.lineHeight;
+                    var width = config.characterWidth;
+                    var top = markerLayer.$getTop(screenPos.row, config);
+                    var left = markerLayer.$padding + screenPos.column * width;
+                    // can add any html here
+                    html.push(
+                        "<div class='other-user-cursor' style='",
+                        "height:", height, "px;",
+                        "top:", top, "px;",
+                        "left:", left, "px; width:", width, "px'></div>"
+                    );
+                }
+            }
+        }
+
+        marker.redraw = function() {
+            this.session._signal("changeFrontMarker");
+        }
+
+        marker.addCursor = function() {
+            // add to this cursors
+            // trigger redraw
+            marker.redraw();
+        }
+
+        marker.session = editor.session;
+        marker.session.addDynamicMarker(marker, true);
+
+    </script>
+
+    <script>
+        $(function () {
+
+            var collaborativeEditor = $.connection.editorHub;
+
+            collaborativeEditor.client.cursorChange = function (cursor) {
+
+                for (var i = 0; i < marker.cursors.length; i++) {
+                    var _cursor = marker.cursors[i];
+
+                    if (_cursor.connectionId == cursor.connectionId) {
+                        marker.cursors.splice(i, 1);
+                        break;
+                    }
+                }
+
+                marker.cursors.push(cursor);
+                marker.redraw();
+            };
+
+            $.connection.hub.start().done(function () {
+
+                editor.on('changeSelection', function () {
+                    var anchor = editor.getSelection().anchor;
+                    collaborativeEditor.server.cursorChange({ row: anchor.row, column: anchor.column });
+                });
+
+            });
+        });
+    </script>
+</body>
+</html>
